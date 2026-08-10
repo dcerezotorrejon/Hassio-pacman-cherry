@@ -1,0 +1,1 @@
+![pacman-cherry](Hassio-pacman-cherry/icon.png)

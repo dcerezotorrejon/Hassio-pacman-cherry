@@ -1,0 +1,16 @@
+{
+  "configuration": {
+    "pkgbuild_repo_url": {
+      "name": "URL del repositorio de PKGBUILDs",
+      "description": "URL del repositorio Git que contiene las carpetas con las recetas PKGBUILD a compilar."
+    },
+    "poll_interval": {
+      "name": "Intervalo de sincronización (minutos)",
+      "description": "Tiempo en minutos entre cada comprobación de cambios en el repositorio Git."
+    },
+    "log_level": {
+      "name": "Nivel de registro",
+      "description": "Nivel de detalle de los logs generados por el Add-on."
+    }
+  }
+}

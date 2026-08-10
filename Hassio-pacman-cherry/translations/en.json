@@ -1,0 +1,16 @@
+{
+  "configuration": {
+    "pkgbuild_repo_url": {
+      "name": "PKGBUILD repository URL",
+      "description": "URL of the Git repository containing directories with PKGBUILD files to compile."
+    },
+    "poll_interval": {
+      "name": "Sync interval (minutes)",
+      "description": "Time in minutes between Git repository change checks."
+    },
+    "log_level": {
+      "name": "Log level",
+      "description": "Detail level of logs produced by the Add-on."
+    }
+  }
+}
