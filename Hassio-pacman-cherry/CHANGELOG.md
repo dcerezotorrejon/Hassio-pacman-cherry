@@ -1,4 +1,9 @@
 # Changelog
+
+## 0.1.0
+
+- Change base to arch linux
+
 ## 0.0.2
 
 - Fix several issues in real device

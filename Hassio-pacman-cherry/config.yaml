@@ -1,9 +1,9 @@
 name: Hassio-pacman-cherry
-version: 0.0.2
+version: 0.1.0
 slug: pacman-cherry
 description: Pacman repository based on AUR style repository
 url: https://github.com/dcerezotorrejon/Hassio-pacman-cherry
-image: "ghcr.io/dcerezotorrejon/pacman-cherry"
+#image: "ghcr.io/dcerezotorrejon/pacman-cherry"
 webui: "[PROTO:ssl]://[HOST]:[PORT:8034]"
 init: false
 arch:
@@ -15,12 +15,6 @@ ports_description:
 #Acceso al almacenamiento de Home Assistant (/share)
 map:
   - share:rw
-
-# Permisos del sistema para permitir chroot / makepkg
-privileged:
-  - SYS_ADMIN
-  - DAC_OVERRIDE
-apparmor: false
 
 options:
   pkgbuild_repo_url: "https://github.com/tu_usuario/tu_repo_pkgbuilds.git"

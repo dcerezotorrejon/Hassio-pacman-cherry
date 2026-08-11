@@ -2,154 +2,96 @@
 
 REPO_DIR="/share/pacman-repo"
 BUILDS_DIR="/tmp/custom-AUR"
-ARCH_DIR="/opt/arch"
+
+# Leer URL del repositorio desde la interfaz web de Home Assistant
 PKGBUILD_REPO_URL=$(bashio::config 'pkgbuild_repo_url')
 
-# ==========================================
-# 0. MONTAR SISTEMAS Y CONFIGURAR RED
-# ==========================================
-bashio::log.info "Verificando montajes del sistema en el chroot..."
-mkdir -p "$ARCH_DIR/dev" "$ARCH_DIR/proc" "$ARCH_DIR/sys" "$ARCH_DIR/tmp" "$ARCH_DIR/etc" "$REPO_DIR"
+bashio::log.info "Iniciando servicio Pacman Cherry Repo (Base Arch Linux nativa)..."
 
-mountpoint -q "$ARCH_DIR/dev" || mount --rbind /dev "$ARCH_DIR/dev"
-mountpoint -q "$ARCH_DIR/proc" || mount -t proc proc "$ARCH_DIR/proc"
-mountpoint -q "$ARCH_DIR/sys" || mount -t sysfs sysfs "$ARCH_DIR/sys"
+mkdir -p "$REPO_DIR" "$BUILDS_DIR"
+chown -R builder:builder "$BUILDS_DIR"
 
-# Montar carpeta compartida dentro del chroot para acceso nativo
-mkdir -p "$ARCH_DIR/share/pacman-repo"
-mountpoint -q "$ARCH_DIR/share/pacman-repo" || mount --bind "$REPO_DIR" "$ARCH_DIR/share/pacman-repo"
-
-# Actualizar resolución DNS dentro del chroot
-cp -L /etc/resolv.conf "$ARCH_DIR/etc/resolv.conf" 2>/dev/null || true
-chmod 1777 "$ARCH_DIR/tmp"
-
-# ==========================================
-# 1. PREPARACIÓN DEL ENTORNO CHROOT (ROOT)
-# ==========================================
-mkdir -p "$ARCH_DIR/etc/pacman.d/gnupg"
-chmod 700 "$ARCH_DIR/etc/pacman.d/gnupg"
-chown -R root:root "$ARCH_DIR/etc/pacman.d/gnupg"
-
-if [ ! -f "$ARCH_DIR/etc/pacman.d/gnupg/pubring.gpg" ]; then
-    bashio::log.info "Inicializando pacman-key dentro del chroot..."
-    chroot "$ARCH_DIR" pacman-key --init
-    chroot "$ARCH_DIR" pacman-key --populate archlinux
+# Configurar e iniciar Caddy en segundo plano para servir HTTP en el puerto 8034
+if ! pgrep -x "caddy" > /dev/null; then
+    bashio::log.info "Iniciando servidor web Caddy en puerto 8034..."
+    caddy file-server --listen :8034 --root "$REPO_DIR" --browse &
 fi
 
-# Desactivar CheckSpace en pacman.conf del chroot
-chroot "$ARCH_DIR" sed -i 's/^CheckSpace/#CheckSpace/' /etc/pacman.conf 2>/dev/null || true
-
-# Desactivar Landlock / alpm sandbox para pacman 7+ dentro del contenedor
-if ! grep -q "^DisableSandbox" "$ARCH_DIR/etc/pacman.conf"; then
-    echo "DisableSandbox" >> "$ARCH_DIR/etc/pacman.conf"
-fi
-
-# Garantizar herramientas esenciales y sudo sin contraseña
-chroot "$ARCH_DIR" pacman -Sy --noconfirm --needed base-devel git fakeroot debugedit pacman-contrib sudo
-chroot "$ARCH_DIR" sed -i 's/ OPTIONS=(\([^)]*\)debug\([^)]*\))/ OPTIONS=(\1!debug\2)/g' /etc/makepkg.conf 2>/dev/null || true
-
-chroot "$ARCH_DIR" groupadd -g 1000 builder 2>/dev/null || true
-chroot "$ARCH_DIR" useradd -u 1000 -g builder -m -s /bin/bash builder 2>/dev/null || true
-mkdir -p "$ARCH_DIR/etc/sudoers.d"
-echo "builder ALL=(ALL) NOPASSWD: ALL" > "$ARCH_DIR/etc/sudoers.d/builder"
-chmod 440 "$ARCH_DIR/etc/sudoers.d/builder"
-
 # ==========================================
-# 2. EVALUAR CAMBIOS EN GIT Y DB
+# 1. GESTIÓN DE GIT Y ESTADO DE STARTUP
 # ==========================================
 IS_STARTUP=false
 HAS_GIT_CHANGES=false
 
-# Si no existe pacman-cherry.db, consideramos que es un arranque limpio / Startup
 if [ ! -f "$REPO_DIR/pacman-cherry.db" ]; then
     IS_STARTUP=true
-    bashio::log.info "Ejecución de startup detectada: Se garantizará la generación de la base de datos."
+    bashio::log.info "Ejecución inicial detectada: Se generará la base de datos de paquetes."
 fi
 
-# Clonar o actualizar repositorio Git
 if [ ! -d "$BUILDS_DIR/.git" ]; then
     bashio::log.info "Clonando repositorio de PKGBUILDs..."
     git clone "$PKGBUILD_REPO_URL" "$BUILDS_DIR"
     HAS_GIT_CHANGES=true
 else
-    bashio::log.info "Comprobando cambios en el repositorio Git..."
+    bashio::log.info "Comprobando actualizaciones en el repositorio Git..."
     git -C "$BUILDS_DIR" fetch origin
-
     LOCAL_HASH=$(git -C "$BUILDS_DIR" rev-parse HEAD)
     REMOTE_HASH=$(git -C "$BUILDS_DIR" rev-parse origin/main)
 
     if [ "$LOCAL_HASH" != "$REMOTE_HASH" ]; then
-        bashio::log.info "Nuevos commits detectados. Actualizando repositorio..."
+        bashio::log.info "Nuevos commits detectados. Actualizando repositorio local..."
         git -C "$BUILDS_DIR" pull
         HAS_GIT_CHANGES=true
     fi
 fi
 
-# En ejecuciones subsecuentes, si no hay cambios en Git ni es startup, salimos rápidamente
 if [ "$IS_STARTUP" = false ] && [ "$HAS_GIT_CHANGES" = false ]; then
     bashio::log.info "Sin cambios en Git. Fin del ciclo de comprobación."
     exit 0
 fi
 
 # ==========================================
-# 3. PROCESO DE COMPILACIÓN CON MAKEPKG
+# 2. COMPILACIÓN DIRECTA CON MAKEPKG
 # ==========================================
 find "$BUILDS_DIR" -maxdepth 2 -name "PKGBUILD" | while read -r pkg_file; do
     pkg_dir=$(dirname "$pkg_file")
     pkg_name=$(basename "$pkg_dir")
 
-    work_dir="$ARCH_DIR/tmp/builds/$pkg_name"
-    rm -rf "$work_dir"
-    mkdir -p "$work_dir"
-    cp -r "$pkg_dir"/* "$work_dir/"
-    chroot "$ARCH_DIR" chown -R builder:builder "/tmp/builds/$pkg_name"
+    chown -R builder:builder "$pkg_dir"
 
-    pkg_version=$(chroot --userspec=builder:builder "$ARCH_DIR" bash -c "cd /tmp/builds/$pkg_name && makepkg --printsrcinfo" | awk '/pkgver =/ {ver=$3} /pkgrel =/ {rel=$3} END {print ver "-" rel}')
-
+    pkg_version=$(su builder -c "cd '$pkg_dir' && makepkg --printsrcinfo" | awk '/pkgver =/ {ver=$3} /pkgrel =/ {rel=$3} END {print ver "-" rel}')
     target_pkg="${pkg_name}-${pkg_version}-x86_64.pkg.tar.zst"
     target_any="${pkg_name}-${pkg_version}-any.pkg.tar.zst"
 
-    # Si la versión compilada ya existe en /share, omitimos compilación
     if [ -f "$REPO_DIR/$target_pkg" ] || [ -f "$REPO_DIR/$target_any" ]; then
-        bashio::log.info "Omite $pkg_name: La versión $pkg_version ya existe."
-        rm -rf "$work_dir"
+        bashio::log.info "Omite $pkg_name: La versión $pkg_version ya está compilada en /share."
         continue
     fi
 
     bashio::log.info "Compilando nueva versión de $pkg_name ($pkg_version)..."
 
-    deps=$(chroot --userspec=builder:builder "$ARCH_DIR" bash -c "cd /tmp/builds/$pkg_name && makepkg --printsrcinfo" | awk '/depends =/ {print $3}')
-    if [ -n "$deps" ]; then
-        chroot "$ARCH_DIR" pacman -Sy --noconfirm --needed $deps 2>/dev/null || true
-    fi
-
-    if chroot --userspec=builder:builder "$ARCH_DIR" bash -c "cd /tmp/builds/$pkg_name && makepkg -s --noconfirm --needed"; then
+    if su builder -c "cd '$pkg_dir' && makepkg -s --noconfirm --needed"; then
         bashio::log.info "Compilación exitosa: $pkg_name"
-        find "$work_dir" -name "*.pkg.tar.zst" -exec cp {} "$REPO_DIR/" \;
+        find "$pkg_dir" -name "*.pkg.tar.zst" -exec cp {} "$REPO_DIR/" \;
     else
         bashio::log.error "Fallo al compilar el paquete: $pkg_name"
     fi
-
-    rm -rf "$work_dir"
 done
 
 # ==========================================
-# 4. REGENERAR BASE DE DATOS Y ENLACES
+# 3. REGENERAR BASE DE DATOS Y ENLACES HTTP
 # ==========================================
 bashio::log.info "Actualizando base de datos pacman-cherry.db y enlaces simbólicos..."
+cd "$REPO_DIR" || exit 1
 
-# Eliminar ficheros antiguos
-rm -f "$REPO_DIR"/pacman-cherry.db* "$REPO_DIR"/pacman-cherry.files*
+rm -f pacman-cherry.db* pacman-cherry.files*
 
-# Generar pacman-cherry.db.tar.gz dentro del chroot
-chroot "$ARCH_DIR" bash -c "cd /share/pacman-repo && repo-add pacman-cherry.db.tar.gz *.pkg.tar.zst"
+repo-add pacman-cherry.db.tar.gz *.pkg.tar.zst
 
-# Crear symlinks exactos que busca Pacman en HTTP
-ln -sf "$REPO_DIR/pacman-cherry.db.tar.gz" "$REPO_DIR/pacman-cherry.db"
-ln -sf "$REPO_DIR/pacman-cherry.files.tar.gz" "$REPO_DIR/pacman-cherry.files"
+ln -sf pacman-cherry.db.tar.gz pacman-cherry.db
+ln -sf pacman-cherry.files.tar.gz pacman-cherry.files
 
-# Limpieza no interactiva de temporales post-build
-yes | chroot "$ARCH_DIR" pacman -Scc 2>/dev/null || true
-rm -rf "$ARCH_DIR/tmp/builds/*"
+# Limpieza de paquetes huérfanos o temporales
+yes | pacman -Scc 2>/dev/null || true
 
 bashio::log.info "Sincronización finalizada con éxito."
