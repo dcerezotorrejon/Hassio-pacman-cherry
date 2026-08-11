@@ -14,6 +14,8 @@ mkdir -p "$ARCH_DIR/dev" "$ARCH_DIR/proc" "$ARCH_DIR/sys" "$ARCH_DIR/tmp" "$ARCH
 mountpoint -q "$ARCH_DIR/dev" || mount --rbind /dev "$ARCH_DIR/dev"
 mountpoint -q "$ARCH_DIR/proc" || mount -t proc proc "$ARCH_DIR/proc"
 mountpoint -q "$ARCH_DIR/sys" || mount -t sysfs sysfs "$ARCH_DIR/sys"
+
+# Montar carpeta compartida dentro del chroot para acceso nativo
 mkdir -p "$ARCH_DIR/share/pacman-repo"
 mountpoint -q "$ARCH_DIR/share/pacman-repo" || mount --bind "$REPO_DIR" "$ARCH_DIR/share/pacman-repo"
 
@@ -36,6 +38,11 @@ fi
 
 # Desactivar CheckSpace en pacman.conf del chroot
 chroot "$ARCH_DIR" sed -i 's/^CheckSpace/#CheckSpace/' /etc/pacman.conf 2>/dev/null || true
+
+# Desactivar Landlock / alpm sandbox para pacman 7+ dentro del contenedor
+if ! grep -q "^DisableSandbox" "$ARCH_DIR/etc/pacman.conf"; then
+    echo "DisableSandbox" >> "$ARCH_DIR/etc/pacman.conf"
+fi
 
 # Garantizar herramientas esenciales y sudo sin contraseña
 chroot "$ARCH_DIR" pacman -Sy --noconfirm --needed base-devel git fakeroot debugedit pacman-contrib sudo
@@ -134,14 +141,14 @@ bashio::log.info "Actualizando base de datos pacman-cherry.db y enlaces simbóli
 # Eliminar ficheros antiguos
 rm -f "$REPO_DIR"/pacman-cherry.db* "$REPO_DIR"/pacman-cherry.files*
 
-# Generar pacman-cherry.db.tar.gz
+# Generar pacman-cherry.db.tar.gz dentro del chroot
 chroot "$ARCH_DIR" bash -c "cd /share/pacman-repo && repo-add pacman-cherry.db.tar.gz *.pkg.tar.zst"
 
-# Crear symlinks exactos
+# Crear symlinks exactos que busca Pacman en HTTP
 ln -sf "$REPO_DIR/pacman-cherry.db.tar.gz" "$REPO_DIR/pacman-cherry.db"
 ln -sf "$REPO_DIR/pacman-cherry.files.tar.gz" "$REPO_DIR/pacman-cherry.files"
 
-# Limpieza post-build
+# Limpieza no interactiva de temporales post-build
 yes | chroot "$ARCH_DIR" pacman -Scc 2>/dev/null || true
 rm -rf "$ARCH_DIR/tmp/builds/*"
 

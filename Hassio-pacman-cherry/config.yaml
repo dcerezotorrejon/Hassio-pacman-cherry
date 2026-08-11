@@ -1,5 +1,5 @@
 name: Hassio-pacman-cherry
-version: 0.0.1
+version: 0.0.2
 slug: pacman-cherry
 description: Pacman repository based on AUR style repository
 url: https://github.com/dcerezotorrejon/Hassio-pacman-cherry
@@ -19,6 +19,7 @@ map:
 # Permisos del sistema para permitir chroot / makepkg
 privileged:
   - SYS_ADMIN
+  - DAC_OVERRIDE
 apparmor: false
 
 options:
