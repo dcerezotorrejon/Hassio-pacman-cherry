@@ -1,4 +1,4 @@
-ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:latest
+ARG BUILD_FROM=ghcr.io/hassio-addons/debian-base/amd64:9.3.0
 FROM ${BUILD_FROM}
 
 
