@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.6
+
+- Added automatic base database regeneration on any change (compilation, deletion or addition).
+- Introduced `CHANGED` flag to track compilation events.
+- Updated builder logic to set flags appropriately and ensure repo‑add runs when necessary.
+- Minor refactoring for clarity.
+
 ## 0.1.5
 
 - Fix invalid `-s` option syntax in git command execution
