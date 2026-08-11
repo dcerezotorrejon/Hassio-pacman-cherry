@@ -1,7 +1,9 @@
 #!/usr/bin/with-contenv bashio
+set -euo pipefail
 
 # Cargar variables de entorno globales
 source /env.sh
+BUILDER_SCRIPT=/builder.sh
 
 POLL_INTERVAL=$(bashio::config 'poll_interval' 30)
 SLEEP_SECONDS=$((POLL_INTERVAL * 60))
@@ -20,8 +22,13 @@ while true; do
         sleep 2
     fi
 
-    # Ejecutar compilación en subproceso
-    /builder.sh || bashio::log.warning "Ocurrió un aviso o error en el ciclo de compilación."
+# Ejecutar compilación en subproceso
+if ! "$BUILDER_SCRIPT"; then
+    bashio::log.error "Builder falló"
+else
+    bashio::log.info "Builder completado con éxito"
+fi
+
 
     bashio::log.info "Esperando $POLL_INTERVAL minutos para la siguiente comprobación..."
     sleep "$SLEEP_SECONDS"
