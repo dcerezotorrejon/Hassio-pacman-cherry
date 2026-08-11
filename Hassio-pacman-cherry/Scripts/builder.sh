@@ -1,7 +1,7 @@
 #!/usr/bin/with-contenv bashio
 
-REPO_DIR="/share/pacman-repo"
-BUILDS_DIR="/var/tmp/custom-AUR"
+REPO_DIR="/data/pacman-cherry/builds"
+BUILDS_DIR="/data/pacman-cherry/pkgbuilds-repo"
 
 PKGBUILD_REPO_URL=$(bashio::config 'pkgbuild_repo_url')
 

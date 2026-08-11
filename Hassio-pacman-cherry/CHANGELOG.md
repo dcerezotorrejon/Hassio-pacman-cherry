@@ -1,6 +1,10 @@
 # Changelog
 
-## 0.1.2
+## 0.1.4
+
+- Change folders to private folder /data
+
+## 0.1.3
 
 - Several optimizations
 
