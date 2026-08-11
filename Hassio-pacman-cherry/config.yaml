@@ -3,7 +3,7 @@ version: 0.1.0
 slug: pacman-cherry
 description: Pacman repository based on AUR style repository
 url: https://github.com/dcerezotorrejon/Hassio-pacman-cherry
-#image: "ghcr.io/dcerezotorrejon/pacman-cherry"
+image: "ghcr.io/dcerezotorrejon/pacman-cherry"
 webui: "[PROTO:ssl]://[HOST]:[PORT:8034]"
 init: false
 arch:
