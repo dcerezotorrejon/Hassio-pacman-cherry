@@ -1,5 +1,5 @@
 name: hassio-pacman-cherry
-version: 0.1.6
+version: 0.1.7
 slug: pacman-cherry
 description: Pacman repository based on AUR style repository
 url: https://github.com/dcerezotorrejon/hassio-pacman-cherry

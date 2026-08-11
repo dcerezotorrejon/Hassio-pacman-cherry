@@ -31,8 +31,8 @@ fi
 
 # 3. Compilar paquetes si es primera ejecución o hubo cambios en Git
 if [ "$IS_STARTUP" = true ] || [ "$HAS_GIT_CHANGES" = true ]; then
-    CHANGED=0   # Flag de cualquier cambio (compilación o eliminación)
-REMOVED=0   # Indica si se eliminaron paquetes obsoletos
+    CHANGED=0   # Flag de cualquier cambio en compilación
+    REMOVED=0   # Indica si se eliminaron paquetes obsoletos
 
     # 3a. Construir cada PKGBUILD encontrado
     while read -r pkg_file; do
@@ -43,10 +43,12 @@ REMOVED=0   # Indica si se eliminaron paquetes obsoletos
         pkg_version=$(su builder -s /bin/bash -c "cd '$pkg_dir' && makepkg --printsrcinfo" | awk '/pkgver =/ {ver=$3} /pkgrel =/ {rel=$3} END {print ver "-" rel}')
         target_pkg="${pkg_name}-${pkg_version}-x86_64.pkg.tar.zst"
         target_any="${pkg_name}-${pkg_version}-any.pkg.tar.zst"
+        
         if [ -f "$REPO_DIR/$target_pkg" ] || [ -f "$REPO_DIR/$target_any" ]; then
             bashio::log.info "Omite $pkg_name: La versión $pkg_version ya está en $REPO_DIR."
             continue
         fi
+        
         bashio::log.info "Compilando nueva versión de $pkg_name ($pkg_version)..."
         if su builder -s /bin/bash -c "cd '$pkg_dir' && makepkg -s --noconfirm --needed"; then
             CHANGED=1
@@ -63,7 +65,10 @@ REMOVED=0   # Indica si se eliminaron paquetes obsoletos
     for pkg_file in "$REPO_DIR"/*.pkg.tar.zst; do
         [ -e "$pkg_file" ] || continue
         filebase=$(basename "$pkg_file" .pkg.tar.zst)
-        pkg_name=${filebase%%-*}
+        
+        # CORREGIDO: Elimina los últimos 3 campos (-version-rel-arch) para preservar guiones en el nombre del paquete
+        pkg_name=$(echo "$filebase" | sed -E 's/-[^-]+-[^-]+-[^-]+$//')
+
         if [ ! -d "$BUILDS_DIR/$pkg_name" ]; then
             REMOVED=1
             bashio::log.info "Removing obsolete package $(basename "$pkg_file")"
@@ -77,9 +82,10 @@ REMOVED=0   # Indica si se eliminaron paquetes obsoletos
     shopt -s nullglob
     PACKAGES=(*.pkg.tar.zst)
     shopt -u nullglob
+    
     if [ ${#PACKAGES[@]} -gt 0 ]; then
-        bashio::log.info "Actualizando base de datos pacman-cherry.db..."
         if [ "$REMOVED" = "1" ] || [ "$CHANGED" = "1" ] || [ "$IS_STARTUP" = true ]; then
+            bashio::log.info "Actualizando base de datos pacman-cherry.db..."
             su builder -s /bin/bash -c "cd '$REPO_DIR' && repo-add -n -R pacman-cherry.db.tar.gz *.pkg.tar.zst"
             ln -sf pacman-cherry.db.tar.gz pacman-cherry.db
             ln -sf pacman-cherry.files.tar.gz pacman-cherry.files

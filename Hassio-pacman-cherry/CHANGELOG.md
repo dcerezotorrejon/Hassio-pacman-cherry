@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.7
+
+- Minimal improvement
+
 ## 0.1.6
 
 - Added automatic base database regeneration on any change (compilation, deletion or addition).
