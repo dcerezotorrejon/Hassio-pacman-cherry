@@ -2,7 +2,7 @@
 
 ![pacman-cherry](Hassio-pacman-cherry/icon.png)
 
-A **Home Assistant** add-on based on **Arch Linux** that acts as a custom **Pacman** package repository, automating the compilation of `PKGBUILD` recipes hosted in a Git repository and serving them via a **Caddy** web server.
+A **Home Assistant** add-on based on **Arch Linux** that acts as a custom **Pacman** package repository, automating the compilation of `PKGBUILD` recipes hosted in a Git repository (such as [custom-AUR](https://github.com/dcerezotorrejon/custom-AUR)) and serving them via a **Caddy** web server.
 
 ---
 
