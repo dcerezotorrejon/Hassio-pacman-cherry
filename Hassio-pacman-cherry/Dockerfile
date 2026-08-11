@@ -39,20 +39,22 @@ RUN mkdir -p /tmp/bashio /usr/lib/bashio && \
     printf '#!/usr/bin/env bash\nsource /usr/lib/bashio/bashio.sh\nif [ -n "$1" ]; then\n  source "$1"\nfi\n' > /usr/bin/bashio && \
     chmod -R +x /usr/lib/bashio /usr/bin/bashio
 
-# 4. Crear usuario 'builder' y AJUSTAR MAKEPKG PARA NO SATURAR LA RAM NI CREAR DEBUG
+# 4. Crear usuario 'builder' y ajustar makepkg (BUILDDIR en disco y desactivar !debug)
 RUN useradd -m -s /bin/bash builder && \
     echo "builder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder && \
     chmod 440 /etc/sudoers.d/builder && \
-    # Modificar makepkg.conf: forzar compilación en disco físico y desactivar paquetes -debug
-    mkdir -p /var/tmp/makepkg && chown builder:builder /var/tmp/makepkg && \
+    mkdir -p /var/tmp/makepkg && \
+    chown builder:builder /var/tmp/makepkg && \
     echo 'BUILDDIR=/var/tmp/makepkg' >> /etc/makepkg.conf && \
-    sed -i 's/OPTIONS=(.*)/OPTIONS=(strip !docs !libtool !staticlibs emptydirs zipman purge !debug !lto)/g' /etc/makepkg.conf
+    sed -i 's/OPTIONS=(/OPTIONS=(!debug /' /etc/makepkg.conf
 
 # 5. Copiar scripts, sanitizar saltos de línea (CRLF a LF) y dar permisos
+# 5. Copiar scripts, sanitizar saltos de línea (CRLF a LF) y dar permisos
+COPY Scripts/env.sh /env.sh
 COPY Scripts/run.sh /run.sh
 COPY Scripts/builder.sh /builder.sh
-RUN sed -i 's/\r$//' /run.sh /builder.sh && \
-    chmod +x /run.sh /builder.sh
+RUN sed -i 's/\r$//' /env.sh /run.sh /builder.sh && \
+    chmod +x /env.sh /run.sh /builder.sh
 
 ENTRYPOINT ["/init"]
 CMD ["/run.sh"]

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.5
+
+- Fix invalid `-s` option syntax in git command execution
+- Centralize shared environment variables into `/env.sh`
+- Improve Caddy process auto-recovery inside the execution loop
+
 ## 0.1.4
 
 - Change folders to private folder /data
