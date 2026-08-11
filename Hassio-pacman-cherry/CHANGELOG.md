@@ -1,5 +1,7 @@
 # Changelog
+## 0.1.8
 
+- Fix removing when PKGBUILD were deleted
 ## 0.1.7
 
 - Minimal improvement

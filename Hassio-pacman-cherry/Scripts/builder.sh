@@ -22,6 +22,7 @@ else
     su builder -s /bin/bash -c "git -C '$BUILDS_DIR' fetch origin"
     LOCAL_HASH=$(su builder -s /bin/bash -c "git -C '$BUILDS_DIR' rev-parse HEAD")
     REMOTE_HASH=$(su builder -s /bin/bash -c "git -C '$BUILDS_DIR' rev-parse '@{u}'")
+    
     if [ "$LOCAL_HASH" != "$REMOTE_HASH" ]; then
         bashio::log.info "Nuevos commits detectados. Actualizando repositorio local..."
         su builder -s /bin/bash -c "git -C '$BUILDS_DIR' pull"
@@ -40,6 +41,7 @@ if [ "$IS_STARTUP" = true ] || [ "$HAS_GIT_CHANGES" = true ]; then
         pkg_dir=$(dirname "$pkg_file")
         pkg_name=$(basename "$pkg_dir")
         chown -R builder:builder "$pkg_dir"
+        
         pkg_version=$(su builder -s /bin/bash -c "cd '$pkg_dir' && makepkg --printsrcinfo" | awk '/pkgver =/ {ver=$3} /pkgrel =/ {rel=$3} END {print ver "-" rel}')
         target_pkg="${pkg_name}-${pkg_version}-x86_64.pkg.tar.zst"
         target_any="${pkg_name}-${pkg_version}-any.pkg.tar.zst"
@@ -61,43 +63,53 @@ if [ "$IS_STARTUP" = true ] || [ "$HAS_GIT_CHANGES" = true ]; then
         fi
     done < <(find "$BUILDS_DIR" -maxdepth 2 -name "PKGBUILD")
 
-    # 3b. Eliminar paquetes obsoletos que ya no tienen PKGBUILD en BUILDS_DIR
+    # 3b. Eliminar paquetes obsoletos si su PKGBUILD ya no existe en el repo Git
     for pkg_file in "$REPO_DIR"/*.pkg.tar.zst; do
         [ -e "$pkg_file" ] || continue
         filebase=$(basename "$pkg_file" .pkg.tar.zst)
-        
-        # CORREGIDO: Elimina los últimos 3 campos (-version-rel-arch) para preservar guiones en el nombre del paquete
         pkg_name=$(echo "$filebase" | sed -E 's/-[^-]+-[^-]+-[^-]+$//')
 
-        if [ ! -d "$BUILDS_DIR/$pkg_name" ]; then
+        if [ ! -f "$BUILDS_DIR/$pkg_name/PKGBUILD" ]; then
             REMOVED=1
-            bashio::log.info "Removing obsolete package $(basename "$pkg_file")"
+            bashio::log.info "Eliminando paquete obsoleto: $(basename "$pkg_file")"
             rm -f "$pkg_file"
         fi
     done
 
-    # 3c. Regenerar base de datos si hubo cambios o es primera ejecución
+    # Limpiar carpetas huérfanas en BUILDS_DIR que hayan quedado tras borrar en Git
+    find "$BUILDS_DIR" -mindepth 1 -maxdepth 1 -type d ! -name ".git" | while read -r dir; do
+        if [ ! -f "$dir/PKGBUILD" ]; then
+            rm -rf "$dir"
+        fi
+    done
+
+    # 3c. Regenerar la base de datos eliminando previamente registros obsoletos
     cd "$REPO_DIR" || exit 1
     chown -R builder:builder "$REPO_DIR"
-    shopt -s nullglob
-    PACKAGES=(*.pkg.tar.zst)
-    shopt -u nullglob
     
-    if [ ${#PACKAGES[@]} -gt 0 ]; then
-        if [ "$REMOVED" = "1" ] || [ "$CHANGED" = "1" ] || [ "$IS_STARTUP" = true ]; then
-            bashio::log.info "Actualizando base de datos pacman-cherry.db..."
+    if [ "$REMOVED" = "1" ] || [ "$CHANGED" = "1" ] || [ "$IS_STARTUP" = true ]; then
+        bashio::log.info "Actualizando base de datos pacman-cherry.db..."
+        
+        # Eliminar ficheros de base de datos antiguos para vaciar referencias a eliminados
+        rm -f pacman-cherry.db* pacman-cherry.files*
+
+        shopt -s nullglob
+        PACKAGES=(*.pkg.tar.zst)
+        shopt -u nullglob
+
+        if [ ${#PACKAGES[@]} -gt 0 ]; then
             su builder -s /bin/bash -c "cd '$REPO_DIR' && repo-add -n -R pacman-cherry.db.tar.gz *.pkg.tar.zst"
             ln -sf pacman-cherry.db.tar.gz pacman-cherry.db
             ln -sf pacman-cherry.files.tar.gz pacman-cherry.files
+        else
+            bashio::log.warning "No quedan archivos .pkg.tar.zst en $REPO_DIR. Base de datos vaciada."
         fi
-    else
-        bashio::log.warning "No se encontraron archivos .pkg.tar.zst en $REPO_DIR. Se omite repo-add."
     fi
 
     chmod 644 pacman-cherry.* *.pkg.tar.zst 2>/dev/null || true
     bashio::log.info "Base de datos y servidor HTTP sincronizados."
 
-    # 3d. Limpieza de carpetas temporales
+    # 3d. Limpieza de temporales en disco
     find "$BUILDS_DIR" -type d \( -name "src" -o -name "pkg" \) -exec rm -rf {} + 2>/dev/null || true
     rm -rf /var/tmp/makepkg/* 2>/dev/null || true
     yes | pacman -Scc 2>/dev/null || true
