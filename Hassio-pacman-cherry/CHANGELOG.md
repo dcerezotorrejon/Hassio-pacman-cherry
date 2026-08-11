@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- Several optimizations
+
 ## 0.1.1
 
 - Change in builder scripts

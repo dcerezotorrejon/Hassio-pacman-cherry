@@ -39,10 +39,14 @@ RUN mkdir -p /tmp/bashio /usr/lib/bashio && \
     printf '#!/usr/bin/env bash\nsource /usr/lib/bashio/bashio.sh\nif [ -n "$1" ]; then\n  source "$1"\nfi\n' > /usr/bin/bashio && \
     chmod -R +x /usr/lib/bashio /usr/bin/bashio
 
-# 4. Crear usuario sin privilegios 'builder' para makepkg
+# 4. Crear usuario 'builder' y AJUSTAR MAKEPKG PARA NO SATURAR LA RAM NI CREAR DEBUG
 RUN useradd -m -s /bin/bash builder && \
     echo "builder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder && \
-    chmod 440 /etc/sudoers.d/builder
+    chmod 440 /etc/sudoers.d/builder && \
+    # Modificar makepkg.conf: forzar compilación en disco físico y desactivar paquetes -debug
+    mkdir -p /var/tmp/makepkg && chown builder:builder /var/tmp/makepkg && \
+    echo 'BUILDDIR=/var/tmp/makepkg' >> /etc/makepkg.conf && \
+    sed -i 's/OPTIONS=(.*)/OPTIONS=(strip !docs !libtool !staticlibs emptydirs zipman purge !debug !lto)/g' /etc/makepkg.conf
 
 # 5. Copiar scripts, sanitizar saltos de línea (CRLF a LF) y dar permisos
 COPY Scripts/run.sh /run.sh
