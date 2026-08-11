@@ -39,16 +39,15 @@ RUN mkdir -p /tmp/bashio /usr/lib/bashio && \
     printf '#!/usr/bin/env bash\nsource /usr/lib/bashio/bashio.sh\nif [ -n "$1" ]; then\n  source "$1"\nfi\n' > /usr/bin/bashio && \
     chmod -R +x /usr/lib/bashio /usr/bin/bashio
 
-# 4. Crear usuario 'builder' y ajustar makepkg (BUILDDIR en disco y desactivar !debug)
+# 4. Crear usuario 'builder' y ajustar makepkg (BUILDDIR en disco y desactivar !strip !debug)
 RUN useradd -m -s /bin/bash builder && \
     echo "builder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder && \
     chmod 440 /etc/sudoers.d/builder && \
     mkdir -p /var/tmp/makepkg && \
     chown builder:builder /var/tmp/makepkg && \
     echo 'BUILDDIR=/var/tmp/makepkg' >> /etc/makepkg.conf && \
-    sed -i 's/OPTIONS=(/OPTIONS=(!debug /' /etc/makepkg.conf
+    sed -i 's/OPTIONS=(/OPTIONS=(!strip !debug /' /etc/makepkg.conf
 
-# 5. Copiar scripts, sanitizar saltos de línea (CRLF a LF) y dar permisos
 # 5. Copiar scripts, sanitizar saltos de línea (CRLF a LF) y dar permisos
 COPY Scripts/env.sh /env.sh
 COPY Scripts/run.sh /run.sh
