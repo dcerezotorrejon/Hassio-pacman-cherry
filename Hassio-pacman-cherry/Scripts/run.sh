@@ -15,7 +15,7 @@ bashio::log.info "Bucle de sincronización activado. Intervalo: $POLL_INTERVAL m
 # Bucle infinito de comprobación
 while true; do
     /builder.sh || bashio::log.warning "Ocurrió un error en el ciclo de compilación."
-    
+
     bashio::log.info "Esperando $POLL_INTERVAL minutos para la siguiente comprobación..."
     sleep "$SLEEP_SECONDS"
 done

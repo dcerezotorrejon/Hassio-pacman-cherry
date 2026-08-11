@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- Change in builder scripts
+
 ## 0.1.0
 
 - Change base to arch linux
