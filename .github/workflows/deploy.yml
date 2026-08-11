@@ -21,6 +21,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Extrae la versión del archivo config.yaml del Add-on
+      - name: Read version from config.yaml
+        id: get_version
+        run: |
+          VERSION=$(grep -E '^version:' ./Hassio-pacman-cherry/config.yaml | awk '{print $2}' | tr -d '"' | tr -d "'")
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -38,6 +45,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest
+            type=raw,value=${{ steps.get_version.outputs.version }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
