@@ -1,4 +1,4 @@
-# Hassio Pacman Cherry 🍒
+# Hassio Pacman Cherry 
 
 ![pacman-cherry](Hassio-pacman-cherry/icon.png)
 
