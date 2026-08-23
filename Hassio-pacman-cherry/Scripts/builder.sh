@@ -35,6 +35,7 @@ if [ "$IS_STARTUP" = true ] || [ "$HAS_GIT_CHANGES" = true ]; then
     CHANGED=0   # Flag de cualquier cambio en compilación
     REMOVED=0   # Indica si se eliminaron paquetes obsoletos
 
+    pacman -Sy --noconfirm
     # 3a. Construir cada PKGBUILD encontrado
     while read -r pkg_file; do
         [ -n "$pkg_file" ] || continue

@@ -1,4 +1,8 @@
 # Changelog
+
+## 0.1.9
+
+- Added pacman mirror update
 ## 0.1.8
 
 - Fix removing when PKGBUILD were deleted
