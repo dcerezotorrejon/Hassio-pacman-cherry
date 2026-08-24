@@ -44,7 +44,60 @@ log_level: "info"
 
 ---
 
-## 🌐 Consuming the Pacman Repository
+## 🐳 Despliegue en Docker / Portainer (Stand-alone)
+
+Este proyecto también se puede ejecutar como un contenedor Docker independiente en cualquier servidor o en **Portainer**, configurando los parámetros mediante variables de entorno y un volumen persistente.
+
+### 1. Variables de Entorno
+
+| Variable | Descripción | Por defecto |
+| :--- | :--- | :--- |
+| `PKGBUILD_REPO_URL` | URL del repositorio Git con las recetas `PKGBUILD`. | *(Obligatorio)* |
+| `POLL_INTERVAL` | Intervalo en minutos entre comprobaciones de cambios en Git. | `30` |
+| `LOG_LEVEL` | Nivel de detalle de los logs (`info`, `debug`, etc.). | `info` |
+| `PORT` | Puerto HTTP en el que Caddy sirve los paquetes compilados. | `8034` |
+
+### 2. Despliegue con Docker Compose / Portainer Stacks
+
+Puedes desplegarlo fácilmente usando el archivo `docker-compose.yml` incluido en el repositorio, o creando una **Stack** en Portainer con el siguiente contenido:
+
+```yaml
+version: '3.8'
+
+services:
+  pacman-cherry:
+    image: ghcr.io/dcerezotorrejon/hassio-pacman-cherry:latest
+    # O puedes construirlo localmente usando: build: .
+    container_name: pacman-cherry
+    restart: unless-stopped
+    ports:
+      - "8034:8034"
+    environment:
+      - PKGBUILD_REPO_URL=https://github.com/tu_usuario/tu_repo_pkgbuilds.git
+      - POLL_INTERVAL=30
+      - LOG_LEVEL=info
+      - PORT=8034
+    volumes:
+      - pacman_data:/data
+
+volumes:
+  pacman_data:
+```
+
+### 3. Despliegue manual con `docker run`
+
+```bash
+docker run -d \
+  --name pacman-cherry \
+  -p 8034:8034 \
+  -e PKGBUILD_REPO_URL="https://github.com/tu_usuario/tu_repo_pkgbuilds.git" \
+  -e POLL_INTERVAL=30 \
+  -v pacman_data:/data \
+  --restart unless-stopped \
+  ghcr.io/dcerezotorrejon/hassio-pacman-cherry:latest
+```
+
+---
 
 Once the add-on is started, you can configure any Arch Linux or compatible system to install packages from your Home Assistant server by adding the following entry to `/etc/pacman.conf`:
 

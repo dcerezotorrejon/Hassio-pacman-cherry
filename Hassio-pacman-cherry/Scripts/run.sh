@@ -17,8 +17,8 @@ bashio::log.info "Bucle de sincronización activado. Intervalo: $POLL_INTERVAL m
 while true; do
     # Asegurar que Caddy se mantenga en ejecución
     if ! pgrep -x "caddy" > /dev/null; then
-        bashio::log.info "Iniciando servidor web Caddy en puerto 8034..."
-        caddy file-server --listen :8034 --root "$REPO_DIR" --browse > /dev/null 2>&1 &
+        bashio::log.info "Iniciando servidor web Caddy en puerto ${PORT:-8034}..."
+        caddy file-server --listen ":${PORT:-8034}" --root "$REPO_DIR" --browse > /dev/null 2>&1 &
         sleep 2
     fi
 

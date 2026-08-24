@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+- Added standalone Docker support for running in Portainer or Docker Compose.
+- Configured environment variables (`PKGBUILD_REPO_URL`, `POLL_INTERVAL`, `LOG_LEVEL`, `PORT`) with automatic `bashio` fallbacks.
+- Added root Dockerfile and docker-compose template.
+
 ## 0.1.9
 
 - Added pacman mirror update
