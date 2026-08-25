@@ -1,42 +1,51 @@
 #!/usr/bin/env bash
 
-# Directorios globales
+# Directorios globales por defecto
 export REPO_DIR="${REPO_DIR:-/data/pacman-cherry/builds}"
 export BUILDS_DIR="${BUILDS_DIR:-/data/pacman-cherry/pkgbuilds-repo}"
 
-# Cargar bashio solo si estamos en Home Assistant Supervisor y existe el token
+# Cargar Bashio únicamente si estamos bajo el Supervisor de Home Assistant
 if [ -n "${SUPERVISOR_TOKEN:-}" ] && [ -f /usr/lib/bashio/bashio.sh ]; then
     source /usr/lib/bashio/bashio.sh
 fi
 
-# Fallback robusto para funciones de bashio si no están definidas (standalone docker o sin supervisor)
+# Fallback de funciones de log si Bashio no está cargado
 if ! type bashio::log.info &>/dev/null; then
-    bashio::log.info() { echo "[INFO] $*"; }
-    bashio::log.error() { echo "[ERROR] $*" >&2; }
+    bashio::log.info()    { echo "[INFO] $*"; }
+    bashio::log.error()   { echo "[ERROR] $*" >&2; }
     bashio::log.warning() { echo "[WARNING] $*"; }
-    bashio::log.debug() { echo "[DEBUG] $*"; }
+    bashio::log.debug()   { echo "[DEBUG] $*"; }
 fi
 
-if ! type bashio::config &>/dev/null; then
-    bashio::config() {
-        local key="$1"
-        local default="$2"
-        case "$key" in
-            pkgbuild_repo_url) echo "${PKGBUILD_REPO_URL:-$default}" ;;
-            poll_interval) echo "${POLL_INTERVAL:-$default}" ;;
-            log_level) echo "${LOG_LEVEL:-$default}" ;;
-            *) echo "$default" ;;
-        esac
-    }
-fi
+# Helper para priorizar variables de entorno (Docker/Portainer) y usar bashio::config como fallback (HA)
+get_config_value() {
+    local env_var="$1"
+    local bashio_key="$2"
+    local default_val="$3"
 
-# Configuración con soporte para variables de entorno directas y fallback a bashio::config
-export PKGBUILD_REPO_URL="${PKGBUILD_REPO_URL:-$(bashio::config 'pkgbuild_repo_url' 2>/dev/null || echo '')}"
-export POLL_INTERVAL="${POLL_INTERVAL:-$(bashio::config 'poll_interval' 2>/dev/null || echo '30')}"
-export LOG_LEVEL="${LOG_LEVEL:-$(bashio::config 'log_level' 2>/dev/null || echo 'info')}"
-export PORT="${PORT:-8034}"
+    # 1. Si la variable de entorno de Docker existe y no está vacía, usarla
+    if [ -n "${!env_var:-}" ]; then
+        echo "${!env_var}"
+        return
+    fi
 
-# Validate required environment variables
+    # 2. Si existe bashio::config (Home Assistant), intentar leer la opción del add-on
+    if type bashio::config &>/dev/null && bashio::config.has_value "$bashio_key" 2>/dev/null; then
+        bashio::config "$bashio_key" 2>/dev/null
+        return
+    fi
+
+    # 3. Usar valor por defecto
+    echo "$default_val"
+}
+
+# Asignación e exportación de variables globales
+export PKGBUILD_REPO_URL="$(get_config_value 'PKGBUILD_REPO_URL' 'pkgbuild_repo_url' '')"
+export POLL_INTERVAL="$(get_config_value 'POLL_INTERVAL' 'poll_interval' '30')"
+export LOG_LEVEL="$(get_config_value 'LOG_LEVEL' 'log_level' 'info')"
+export PORT="$(get_config_value 'PORT' 'port' '8034')"
+
+# Validación de variables requeridas
 if [ -z "$PKGBUILD_REPO_URL" ]; then
     bashio::log.error "Missing PKGBUILD_REPO_URL – set via env var or config."
     exit 1

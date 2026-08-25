@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
 # Cargar variables de entorno globales
 source /env.sh
@@ -6,8 +7,8 @@ source /env.sh
 IS_STARTUP=false
 HAS_GIT_CHANGES=false
 
-# 1. Comprobar estado de la base de datos y repositorio Git
-if [ ! -f "$REPO_DIR/pacman-cherry.db" ]; then
+# 1. Comprobar estado de la base de datos de pacman
+if [ ! -e "$REPO_DIR/pacman-cherry.db" ]; then
     IS_STARTUP=true
     bashio::log.info "Ejecución inicial detectada: Se generará la base de datos de paquetes."
 fi
@@ -15,27 +16,28 @@ fi
 # 2. Clonar o actualizar el repositorio de PKGBUILDs
 if [ ! -d "$BUILDS_DIR/.git" ]; then
     bashio::log.info "Clonando repositorio de PKGBUILDs..."
-    su builder -s /bin/bash -c "git clone '$PKGBUILD_REPO_URL' '$BUILDS_DIR'"
+    su -s /bin/bash builder -c "git clone '$PKGBUILD_REPO_URL' '$BUILDS_DIR'"
     HAS_GIT_CHANGES=true
 else
     bashio::log.info "Comprobando actualizaciones en el repositorio Git..."
-    su builder -s /bin/bash -c "git -C '$BUILDS_DIR' fetch origin"
-    LOCAL_HASH=$(su builder -s /bin/bash -c "git -C '$BUILDS_DIR' rev-parse HEAD")
-    REMOTE_HASH=$(su builder -s /bin/bash -c "git -C '$BUILDS_DIR' rev-parse '@{u}'")
+    su -s /bin/bash builder -c "git -C '$BUILDS_DIR' fetch origin"
+    LOCAL_HASH=$(su -s /bin/bash builder -c "git -C '$BUILDS_DIR' rev-parse HEAD")
+    REMOTE_HASH=$(su -s /bin/bash builder -c "git -C '$BUILDS_DIR' rev-parse '@{u}'")
     
     if [ "$LOCAL_HASH" != "$REMOTE_HASH" ]; then
         bashio::log.info "Nuevos commits detectados. Actualizando repositorio local..."
-        su builder -s /bin/bash -c "git -C '$BUILDS_DIR' pull"
+        su -s /bin/bash builder -c "git -C '$BUILDS_DIR' pull"
         HAS_GIT_CHANGES=true
     fi
 fi
 
 # 3. Compilar paquetes si es primera ejecución o hubo cambios en Git
 if [ "$IS_STARTUP" = true ] || [ "$HAS_GIT_CHANGES" = true ]; then
-    CHANGED=0   # Flag de cualquier cambio en compilación
-    REMOVED=0   # Indica si se eliminaron paquetes obsoletos
+    CHANGED=0
+    REMOVED=0
 
     pacman -Syyu --noconfirm
+
     # 3a. Construir cada PKGBUILD encontrado
     while read -r pkg_file; do
         [ -n "$pkg_file" ] || continue
@@ -43,7 +45,14 @@ if [ "$IS_STARTUP" = true ] || [ "$HAS_GIT_CHANGES" = true ]; then
         pkg_name=$(basename "$pkg_dir")
         chown -R builder:builder "$pkg_dir"
         
-        pkg_version=$(su builder -s /bin/bash -c "cd '$pkg_dir' && makepkg --printsrcinfo" | awk '/pkgver =/ {ver=$3} /pkgrel =/ {rel=$3} END {print ver "-" rel}')
+        # Obtener versión usando makepkg de forma segura
+        pkg_version=$(su -s /bin/bash builder -c "cd '$pkg_dir' && makepkg --packagelist" 2>/dev/null | head -n 1 | sed -E 's/.*-([0-9a-zA-Z._]+-[0-9]+)-(x86_64|any)\.pkg\.tar\.zst/\1/')
+
+        if [ -z "$pkg_version" ]; then
+            # Fallback a srcinfo si packagelist falla
+            pkg_version=$(su -s /bin/bash builder -c "cd '$pkg_dir' && makepkg --printsrcinfo" | awk '/pkgver =/ {ver=$3} /pkgrel =/ {rel=$3} END {print ver "-" rel}')
+        fi
+
         target_pkg="${pkg_name}-${pkg_version}-x86_64.pkg.tar.zst"
         target_any="${pkg_name}-${pkg_version}-any.pkg.tar.zst"
         
@@ -53,12 +62,12 @@ if [ "$IS_STARTUP" = true ] || [ "$HAS_GIT_CHANGES" = true ]; then
         fi
         
         bashio::log.info "Compilando nueva versión de $pkg_name ($pkg_version)..."
-        if su builder -s /bin/bash -c "cd '$pkg_dir' && makepkg -s --noconfirm --needed"; then
+        if su -s /bin/bash builder -c "cd '$pkg_dir' && makepkg -s --noconfirm --needed"; then
             CHANGED=1
             bashio::log.info "Compilación exitosa: $pkg_name"
             find "$pkg_dir" -maxdepth 1 -name "*.pkg.tar.zst" ! -name "*-debug-*.pkg.tar.zst" -exec mv {} "$REPO_DIR/" \;
             chown -R builder:builder "$REPO_DIR"
-            su builder -s /bin/bash -c "cd '$pkg_dir' && makepkg -c --noconfirm" 2>/dev/null
+            su -s /bin/bash builder -c "cd '$pkg_dir' && makepkg -c --noconfirm" 2>/dev/null || true
         else
             bashio::log.error "Fallo al compilar el paquete: $pkg_name"
         fi
@@ -70,28 +79,27 @@ if [ "$IS_STARTUP" = true ] || [ "$HAS_GIT_CHANGES" = true ]; then
         filebase=$(basename "$pkg_file" .pkg.tar.zst)
         pkg_name=$(echo "$filebase" | sed -E 's/-[^-]+-[^-]+-[^-]+$//')
 
-        if [ ! -f "$BUILDS_DIR/$pkg_name/PKGBUILD" ]; then
+        if [ ! -d "$BUILDS_DIR/$pkg_name" ] || [ ! -f "$BUILDS_DIR/$pkg_name/PKGBUILD" ]; then
             REMOVED=1
             bashio::log.info "Eliminando paquete obsoleto: $(basename "$pkg_file")"
             rm -f "$pkg_file"
         fi
     done
 
-    # Limpiar carpetas huérfanas en BUILDS_DIR que hayan quedado tras borrar en Git
+    # Limpiar carpetas huérfanas en BUILDS_DIR tras borrar en Git
     find "$BUILDS_DIR" -mindepth 1 -maxdepth 1 -type d ! -name ".git" | while read -r dir; do
         if [ ! -f "$dir/PKGBUILD" ]; then
             rm -rf "$dir"
         fi
     done
 
-    # 3c. Regenerar la base de datos eliminando previamente registros obsoletos
+    # 3c. Regenerar la base de datos pacman
     cd "$REPO_DIR" || exit 1
     chown -R builder:builder "$REPO_DIR"
     
     if [ "$REMOVED" = "1" ] || [ "$CHANGED" = "1" ] || [ "$IS_STARTUP" = true ]; then
         bashio::log.info "Actualizando base de datos pacman-cherry.db..."
         
-        # Eliminar ficheros de base de datos antiguos para vaciar referencias a eliminados
         rm -f pacman-cherry.db* pacman-cherry.files*
 
         shopt -s nullglob
@@ -99,7 +107,7 @@ if [ "$IS_STARTUP" = true ] || [ "$HAS_GIT_CHANGES" = true ]; then
         shopt -u nullglob
 
         if [ ${#PACKAGES[@]} -gt 0 ]; then
-            su builder -s /bin/bash -c "cd '$REPO_DIR' && repo-add -n -R pacman-cherry.db.tar.gz *.pkg.tar.zst"
+            su -s /bin/bash builder -c "cd '$REPO_DIR' && repo-add -n -R pacman-cherry.db.tar.gz *.pkg.tar.zst"
             ln -sf pacman-cherry.db.tar.gz pacman-cherry.db
             ln -sf pacman-cherry.files.tar.gz pacman-cherry.files
         else
