@@ -5,7 +5,7 @@ set -euo pipefail
 source /env.sh
 BUILDER_SCRIPT=/builder.sh
 
-POLL_INTERVAL=$(bashio::config 'poll_interval' 30)
+SLEEP_SECONDS=$((POLL_INTERVAL * 60))
 SLEEP_SECONDS=$((POLL_INTERVAL * 60))
 
 # Crear estructura de directorios inicial

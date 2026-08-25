@@ -35,3 +35,14 @@ export PKGBUILD_REPO_URL="${PKGBUILD_REPO_URL:-$(bashio::config 'pkgbuild_repo_u
 export POLL_INTERVAL="${POLL_INTERVAL:-$(bashio::config 'poll_interval' 2>/dev/null || echo '30')}"
 export LOG_LEVEL="${LOG_LEVEL:-$(bashio::config 'log_level' 2>/dev/null || echo 'info')}"
 export PORT="${PORT:-8034}"
+
+# Validate required environment variables
+if [ -z "$PKGBUILD_REPO_URL" ]; then
+    bashio::log.error "Missing PKGBUILD_REPO_URL – set via env var or config."
+    exit 1
+fi
+
+if ! [[ "$POLL_INTERVAL" =~ ^[0-9]+$ ]]; then
+    bashio::log.error "Invalid POLL_INTERVAL: must be numeric"
+    exit 1
+fi

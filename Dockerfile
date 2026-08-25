@@ -55,5 +55,7 @@ COPY Hassio-pacman-cherry/Scripts/builder.sh /builder.sh
 RUN sed -i 's/\r$//' /env.sh /run.sh /builder.sh && \
     chmod +x /env.sh /run.sh /builder.sh
 
+
+
 ENTRYPOINT ["/init"]
 CMD ["/run.sh"]
