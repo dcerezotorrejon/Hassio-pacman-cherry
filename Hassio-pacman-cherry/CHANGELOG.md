@@ -3,6 +3,7 @@
 ## 0.2.1
 
 - Fix syntax error in `env.sh` (`es}` instead of `esac` in `bashio::config` fallback).
+- Fix unbound variable error (`info: unbound variable`) when running in standalone Docker without Home Assistant Supervisor by conditionally loading `bashio.sh` only when `SUPERVISOR_TOKEN` is present.
 
 ## 0.2.0
 
