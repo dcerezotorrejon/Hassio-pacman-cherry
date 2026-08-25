@@ -2,14 +2,16 @@ version: '3.8'
 
 services:
   pacman-cherry:
-    build: .
-    image: ghcr.io/dcerezotorrejon/hassio-pacman-cherry:latest
+    build:
+      context: ./Hassio-pacman-cherry
+      dockerfile: Dockerfile
+    #image: ghcr.io/dcerezotorrejon/hassio-pacman-cherry:latest
     container_name: pacman-cherry
     restart: unless-stopped
     ports:
       - "8034:8034"
     environment:
-      - PKGBUILD_REPO_URL=https://github.com/tu_usuario/tu_repo_pkgbuilds.git
+      - PKGBUILD_REPO_URL=https://github.com/dcerezotorrejon/custom-AUR.git
       - POLL_INTERVAL=30
       - LOG_LEVEL=info
       - PORT=8034
