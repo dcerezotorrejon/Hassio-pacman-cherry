@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- Fix syntax error in `env.sh` (`es}` instead of `esac` in `bashio::config` fallback).
+
 ## 0.2.0
 
 - Added standalone Docker support for running in Portainer or Docker Compose.

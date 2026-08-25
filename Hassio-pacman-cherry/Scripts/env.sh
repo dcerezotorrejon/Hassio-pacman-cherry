@@ -27,6 +27,6 @@ if ! type bashio::config &>/dev/null; then
             poll_interval) echo "${POLL_INTERVAL:-$default}" ;;
             log_level) echo "${LOG_LEVEL:-$default}" ;;
             *) echo "$default" ;;
-        es}
+        esac
     }
 fi
